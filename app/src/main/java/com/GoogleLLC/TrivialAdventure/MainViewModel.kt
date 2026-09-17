@@ -130,26 +130,26 @@ class MainViewModel(
             it.copy(isResolvingTrial = false, trialAvailability = trialsManager.availability())
         }
 
-        when (outcome) {
-            TrialOutcome.TrialStopped -> {
+        when (outcome.kind) {
+            TrialOutcome.Kind.TRIAL_STOPPED -> {
                 // Play owns the screen now. No XP, no level: the player stays at the milestone
                 // so that returning from the paywall resumes exactly here.
                 log("Trial ended at the progression milestone. Play paywall requested.", LogKind.TRIAL)
             }
 
-            TrialOutcome.AlreadyUnlocked -> {
+            TrialOutcome.Kind.ALREADY_UNLOCKED -> {
                 _effects.trySend(GameEffect.ShowToast(UNLOCKED_TOAST))
                 log("Full version detected - no trial to stop.", LogKind.TRIAL)
                 defeatBoss(level)
             }
 
-            TrialOutcome.SdkUnavailable -> {
+            TrialOutcome.Kind.SDK_UNAVAILABLE -> {
                 _effects.trySend(GameEffect.ShowToast(UNLOCKED_TOAST))
                 log("Play Trials SDK absent - milestone treated as a normal boss.", LogKind.TRIAL)
                 defeatBoss(level)
             }
 
-            is TrialOutcome.Failed -> {
+            TrialOutcome.Kind.FAILED -> {
                 _effects.trySend(GameEffect.ShowToast(UNLOCKED_TOAST))
                 log("stopTrial() failed (${outcome.reason}); failing open.", LogKind.TRIAL)
                 defeatBoss(level)
@@ -176,12 +176,13 @@ class MainViewModel(
      * just bought the game on the paywall we launched.
      */
     fun onResume() {
-        val wasUnlocked = _uiState.value.trialAvailability is TrialAvailability.FullVersion
+        val wasUnlocked =
+            _uiState.value.trialAvailability.kind == TrialAvailability.Kind.FULL_VERSION
         trialsManager.refreshEntitlement()
         val availability = trialsManager.availability()
         _uiState.update { it.copy(trialAvailability = availability) }
 
-        if (!wasUnlocked && availability is TrialAvailability.FullVersion) {
+        if (!wasUnlocked && availability.kind == TrialAvailability.Kind.FULL_VERSION) {
             log("Purchase detected - full version unlocked. The boss is now beatable.", LogKind.TRIAL)
             _effects.trySend(GameEffect.ShowToast("Thanks for buying! Full game unlocked."))
         }
@@ -224,13 +225,14 @@ class MainViewModel(
         }
     }
 
-    private fun startupMessage(availability: TrialAvailability): String = when (availability) {
-        is TrialAvailability.TrialActive ->
-            "Trial active. Bound to ${availability.binding}. Trial ends at level ${GameRules.TRIAL_MILESTONE_LEVEL}."
-        TrialAvailability.FullVersion -> "Full version. Progression is unrestricted."
-        TrialAvailability.SdkMissing ->
+    private fun startupMessage(availability: TrialAvailability): String = when (availability.kind) {
+        TrialAvailability.Kind.TRIAL_ACTIVE ->
+            "Trial active. Bound to ${availability.detail}. Trial ends at level ${GameRules.TRIAL_MILESTONE_LEVEL}."
+        TrialAvailability.Kind.FULL_VERSION -> "Full version. Progression is unrestricted."
+        TrialAvailability.Kind.SDK_MISSING ->
             "Play Trials SDK not installed - drop play-trials-sdk.aar into app/libs to arm the paywall."
-        is TrialAvailability.SdkIncompatible -> "Trials SDK found but unusable: ${availability.reason}"
+        TrialAvailability.Kind.SDK_INCOMPATIBLE ->
+            "Trials SDK found but unusable: ${availability.detail}"
     }
 
     companion object {

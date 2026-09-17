@@ -7,7 +7,8 @@ be exercised end to end.
 - **Package / applicationId:** `com.GoogleLLC.TrivialAdventure` (debug builds install as
   `com.GoogleLLC.TrivialAdventure.debug`)
 - **Milestone:** reaching **Level 5** and tapping **Fight Boss** ends the trial
-- **Stack:** Kotlin, Jetpack Compose (Material 3), MVVM, Gradle KTS + version catalog
+- **Stack:** Java (Play Trials SDK layer) + Kotlin/Jetpack Compose (Material 3) UI, MVVM,
+  Gradle KTS + version catalog
 
 ---
 
@@ -110,9 +111,22 @@ JAVA_HOME=/path/to/jdk-21 ./gradlew :app:assembleDebug
 
 | File | Role |
 |---|---|
-| `trials/GameTrialsManager.kt` | Sole seam to the SDK; reflective binding, entitlement, `stopTrial` |
-| `trials/TrialModels.kt` | `TrialAvailability` / `TrialOutcome` — SDK-free domain types |
+| `trials/GameTrialsManager.java` | Sole seam to the SDK; entitlement, `stopTrial` (Java) |
+| `trials/PlayTrialsBinding.java` | Reflective resolution of the SDK surface (Java, package-private) |
+| `trials/TrialAvailability.java` | SDK-free domain type; `Kind` enum + `detail` (Java) |
+| `trials/TrialOutcome.java` | SDK-free domain type; `Kind` enum + `reason` (Java) |
 | `MainViewModel.kt` | Level/XP state, quest & boss logic, milestone branch |
 | `MainActivity.kt` | Hosts Compose; performs the `Activity`-scoped SDK call |
 | `game/GameModels.kt` | `GameRules` (pure, unit-tested) + `GameUiState` |
 | `ui/GameScreen.kt` | Compose UI, trial status banner, QA controls |
+
+### Why the SDK layer is Java but the UI is Kotlin
+
+Jetpack Compose **cannot** be written in Java — `@Composable` is implemented by a Kotlin
+compiler plugin. So the split is drawn at the SDK seam: everything a partner needs to copy
+when integrating Play Trials (`trials/`) is plain Java, while the UI stays Kotlin/Compose.
+
+The two domain types use an inner `Kind` enum plus a detail string rather than a class
+hierarchy, because Kotlin does not treat a Java class hierarchy as sealed — subclasses would
+force an `else` branch on every `when`. Kotlin *does* honour exhaustive `when` over a Java
+enum, so call sites stay exhaustive and compiler-checked.

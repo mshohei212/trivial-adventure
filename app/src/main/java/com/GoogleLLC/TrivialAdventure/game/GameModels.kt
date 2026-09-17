@@ -107,7 +107,7 @@ data class GameUiState(
     val log: List<QuestLogEntry> = emptyList(),
     /** True while the paywall request is in flight, to stop double-taps. */
     val isResolvingTrial: Boolean = false,
-    val trialAvailability: TrialAvailability = TrialAvailability.SdkMissing,
+    val trialAvailability: TrialAvailability = TrialAvailability.sdkMissing(),
     /** Drives the scene panel art; `null` before the first quest. */
     val lastEncounter: Encounter? = null,
 ) {
