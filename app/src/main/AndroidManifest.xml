@@ -29,23 +29,12 @@
             the game reports a milestone (here: reaching the Level 5 boss), rather than after
             a fixed wall-clock duration.
 
-            This is the tag the Play Trials SDK reads at startup to decide which trial
-            controller to install. Without it the SDK defaults to a time-based trial and
-            GameTrialsManager.stopTrial() is a no-op.
+            Name and value are fixed by the Play Trials integration requirements and must
+            match exactly; the SDK reads this at startup to pick the trial controller.
         -->
         <meta-data
             android:name="com.google.android.play.tbyb.trial_type"
             android:value="progression" />
-
-        <!--
-            Some SDK drops read the namespaced variant below instead. Both are harmless when
-            present; uncomment if the partner build of the AAR expects this key.
-
-            <meta-data
-                android:name="com.google.android.play.trials.trial_type"
-                android:value="progression" />
-        -->
-
         <activity
             android:name=".MainActivity"
             android:exported="true"

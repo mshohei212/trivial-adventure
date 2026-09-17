@@ -83,6 +83,40 @@ required on Android 11+ for the SDK to reach the Play Store.
 
 ---
 
+## Play Trials requirements checklist
+
+### Application / SDK
+
+| Requirement | Status |
+|---|---|
+| Published as an Android App Bundle (`.aab`); legacy APKs unsupported | ✅ `./gradlew :app:bundleRelease` |
+| `minSdkVersion` ≥ 24 (for Play installer checks) | ✅ `minSdk = 24` |
+| `play-trials-sdk.aar` in `libs/` **and** declared in `build.gradle.kts` | ⚠️ declaration ✅ (`fileTree`), **AAR not present** |
+| `<meta-data android:name="com.google.android.play.tbyb.trial_type" android:value="progression" />` | ✅ verified in the release merged manifest |
+| `stopTrial()` called on the main thread, not an isolated process | ✅ enforced at runtime in `GameTrialsManager.stopTrial` |
+
+### Play Console / security
+
+| Requirement | Status |
+|---|---|
+| Play App Signing enabled | ❌ currently a local self-generated key |
+| **Installer checks (anti-tamper) enabled** — strict prerequisite | ❌ not configured |
+| AAB uploaded to an Open or Internal testing track | ❌ |
+| Testers opted in via the opt-in URL | ❌ |
+
+> [!WARNING]
+> **Until the AAR is present, the real SDK path has never executed.** Every run so far has
+> exercised only the fail-open branch (`SDK MISSING`). The reflective binding is written against
+> expected signatures, not observed ones — check `adb logcat -s GameTrialsManager` first thing
+> after dropping the AAR in.
+
+> [!IMPORTANT]
+> Trial enforcement depends on **installer checks** being enabled in the Play Console and on the
+> build being installed **by Play** from a test track the account has opted into. A sideloaded
+> APK will not enforce the trial, so `stopTrial()` appearing to do nothing locally is expected.
+
+---
+
 ## QA controls
 
 Bottom of the screen:
@@ -128,6 +162,10 @@ $EDITOR keystore.properties      # fill in storePassword / keyPassword
 # 3. Build.
 ./gradlew :app:assembleRelease
 # -> app/build/outputs/apk/release/app-release.apk   (signed, installable)
+
+# For Play, build the bundle instead -- Play Trials does not accept legacy APKs.
+./gradlew :app:bundleRelease
+# -> app/build/outputs/bundle/release/app-release.aab  (signed, uploadable)
 ```
 
 Verify what you produced:

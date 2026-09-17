@@ -1,8 +1,11 @@
 package com.GoogleLLC.TrivialAdventure.trials;
 
 import android.app.Activity;
+import android.app.Application;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Build;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.MainThread;
@@ -136,7 +139,9 @@ public final class GameTrialsManager {
      * the game.
      *
      * <p>Must be called on the main thread with the foreground {@link Activity}: the SDK needs a
-     * live window token to attach the purchase flow to.
+     * live window token to attach the purchase flow to. The Play Trials integration requirements
+     * state this explicitly, so it is enforced at runtime below and not merely annotated --
+     * {@link MainThread} is a lint hint that vanishes at compile time.
      *
      * @return {@link TrialOutcome.Kind#TRIAL_STOPPED} when Play has taken over (do <b>not</b>
      *     grant the reward), otherwise a fail-open outcome and the caller should let the player
@@ -145,6 +150,25 @@ public final class GameTrialsManager {
     @MainThread
     @NonNull
     public TrialOutcome stopTrial(@NonNull Activity activity) {
+        // Requirement: the call must originate on the main application thread. Calling anyway
+        // from a worker would be undefined behaviour in the SDK, so refuse and fail open -- the
+        // tester still advances, and the mistake is obvious in logcat.
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            String thread = Thread.currentThread().getName();
+            Log.e(TAG, "stopTrial() must be called on the main thread, but was called on '"
+                    + thread + "'. Refusing to invoke the SDK; failing open.");
+            return TrialOutcome.failed("called off the main thread (" + thread + ")");
+        }
+
+        // Requirement: the call must not come from an isolated/secondary process. An Activity
+        // cannot exist in an isolated process, so this only catches a multi-process setup where
+        // the SDK was bound in a process other than the main one.
+        String offendingProcess = secondaryProcessName();
+        if (offendingProcess != null) {
+            Log.w(TAG, "stopTrial() invoked from secondary process '" + offendingProcess
+                    + "'. Play Trials expects the main process; the call may be ignored.");
+        }
+
         // Owning the game means there is no trial left to stop.
         if (isFullVersionUnlocked()) {
             Log.i(TAG, "stopTrial() skipped: full version already unlocked.");
@@ -213,6 +237,26 @@ public final class GameTrialsManager {
         }
         cachedSdkEntitlement = entitled;
         return entitled;
+    }
+
+    /**
+     * Name of the current process when it is <em>not</em> the app's main process, else null.
+     *
+     * <p>Play Trials must be driven from the main process. The main process is the one named
+     * after the package; anything else came from an {@code android:process} attribute. Returns
+     * null when the name cannot be determined (below API 28), since guessing would produce a
+     * misleading warning.
+     */
+    @Nullable
+    private String secondaryProcessName() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            return null;
+        }
+        String processName = Application.getProcessName();
+        if (processName == null || processName.equals(appContext.getPackageName())) {
+            return null;
+        }
+        return processName;
     }
 
     /** Reflection wraps the real failure; unwrap it so the log is useful. */

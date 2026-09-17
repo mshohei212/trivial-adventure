@@ -31,12 +31,14 @@ fun Properties.requireProperty(key: String): String =
 
 android {
     namespace = "com.GoogleLLC.TrivialAdventure"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.GoogleLLC.TrivialAdventure"
+        // Play Trials requires minSdk >= 24 so the Play installer checks that enforce the
+        // trial can run. Do not lower this.
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
