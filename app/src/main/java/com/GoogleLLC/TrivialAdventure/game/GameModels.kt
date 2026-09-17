@@ -115,11 +115,14 @@ data class GameUiState(
     val isBossLevel: Boolean get() = GameRules.isBossLevel(level)
 
     /**
-     * True when this boss is the trial milestone AND the trial is still enforceable.
-     * Once the user owns the game (or the SDK is absent) the milestone is an ordinary boss.
+     * True when this boss is at or beyond the trial milestone AND the trial is still
+     * enforceable. Once the user owns the game (or the SDK is absent) it is an ordinary boss.
+     *
+     * Mirrors the `level >= TRIAL_MILESTONE_LEVEL` trigger in `MainViewModel.fightBoss`; if the
+     * two ever disagree the UI would promise a paywall that does not fire, or vice versa.
      */
     val isTrialMilestone: Boolean
-        get() = level == GameRules.TRIAL_MILESTONE_LEVEL &&
+        get() = level >= GameRules.TRIAL_MILESTONE_LEVEL &&
             isBossLevel &&
             trialAvailability.isTrialEnforced
 

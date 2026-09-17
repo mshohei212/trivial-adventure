@@ -108,7 +108,11 @@ class MainViewModel(
      * to make the call and then reacts to the [TrialOutcome].
      */
     private fun fightBoss(level: Int) {
-        if (level != GameRules.TRIAL_MILESTONE_LEVEL) {
+        // At-or-beyond, not equality. If the player somehow arrives past the milestone without
+        // having stopped the trial -- restored save data, a QA jump, a future change to the
+        // level-up loop -- an equality check would silently disarm the paywall forever. Every
+        // boss from the milestone onwards re-asserts it.
+        if (level < GameRules.TRIAL_MILESTONE_LEVEL) {
             defeatBoss(level)
             return
         }
@@ -146,6 +150,16 @@ class MainViewModel(
             TrialOutcome.Kind.SDK_UNAVAILABLE -> {
                 _effects.trySend(GameEffect.ShowToast(UNLOCKED_TOAST))
                 log("Play Trials SDK absent - milestone treated as a normal boss.", LogKind.TRIAL)
+                defeatBoss(level)
+            }
+
+            TrialOutcome.Kind.NOT_ENFORCED -> {
+                _effects.trySend(GameEffect.ShowToast(UNLOCKED_TOAST))
+                log(
+                    "stopTrial() called, but this build was not installed by Play " +
+                        "(${outcome.reason}) - no paywall. Failing open.",
+                    LogKind.TRIAL,
+                )
                 defeatBoss(level)
             }
 

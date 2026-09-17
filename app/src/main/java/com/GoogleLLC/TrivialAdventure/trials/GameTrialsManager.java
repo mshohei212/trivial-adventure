@@ -188,6 +188,17 @@ public final class GameTrialsManager {
         try {
             Log.i(TAG, "Progression milestone reached -> invoking " + current.binding.describe());
             current.binding.stopTrial(activity);
+
+            // Always call stopTrial -- that is what a shipping game does, and it is what Play
+            // records. But the call cannot report that nothing happened, so decide the local
+            // UX separately: with no licensing client there will be no paywall, and withholding
+            // the reward here would strand the player at a boss with a blank screen.
+            if (!PlayTrialsBinding.isEnforcementAvailable()) {
+                Log.w(TAG, "stopTrial() called, but Play's licensing client is absent: this build "
+                        + "was not installed by Play, so no paywall will appear. Failing open.");
+                return TrialOutcome.notEnforced("not installed by Play - trial cannot be enforced");
+            }
+
             // Play now owns the screen and entitlement may change behind us, so drop the cache.
             cachedSdkEntitlement = null;
             return TrialOutcome.trialStopped();

@@ -19,7 +19,7 @@ Level 1 ──quest × ~14──▶ Level 5 (first boss)
                             │  tap "Fight Boss"
                             ▼
                    MainViewModel.fightBoss()
-                            │  level == TRIAL_MILESTONE_LEVEL
+                            │  level >= TRIAL_MILESTONE_LEVEL
                             ▼
               GameEffect.RequestStopTrial  (one-shot effect)
                             │
@@ -30,21 +30,29 @@ Level 1 ──quest × ~14──▶ Level 5 (first boss)
                     TrialOutcome  →  viewModel.onTrialOutcome(...)
 ```
 
+The comparison is `>=`, not `==`. If the paywall does not actually engage (sideloaded build,
+enforcement disabled, SDK missing) the player advances past Level 5, and an equality check would
+silently disarm the milestone forever. With `>=` **every** boss at or beyond the milestone
+re-asserts the trial — verified on the emulator at Level 10.
+
 `stopTrial` needs a foreground `Activity` (the paywall attaches to its window), and a ViewModel
-must never hold one — hence the effect hop through the Activity.
+must never hold one — hence the effect hop through the Activity. The SDK's own signature only
+asks for a `Context`, but passing the Activity keeps the paywall attached to the visible window.
 
 ### Outcomes
 
 | Outcome | When | Game behaviour |
 |---|---|---|
-| `TrialStopped` | SDK present, trial active | **No reward.** Play raises the paywall; the player stays on Level 5 so returning resumes exactly there. |
-| `AlreadyUnlocked` | User owns the full game | Toast *"Full Game Unlocked! Boss Defeated!"*, advance to Level 6 |
+| `TrialStopped` | SDK present, trial enforceable | **No reward.** Play raises the paywall; the player stays on the boss level so returning resumes exactly there. |
+| `NotEnforced` | `stopTrial()` returned, but Play's licensing client is absent (not installed by Play) | Toast *"Full Game Unlocked! Boss Defeated!"*, advance a level — **fail open** |
+| `AlreadyUnlocked` | User owns the full game | Same as above |
 | `SdkUnavailable` | `play-trials-sdk.aar` not on the classpath | Same as above — the sandbox stays playable |
 | `Failed(reason)` | SDK threw | Same as above (**fail open**) |
 
 > [!IMPORTANT]
 > Every outcome except `TrialStopped` fails open. A broken or absent trial integration must
 > never soft-lock a tester behind a boss they cannot fight.
+
 
 ### The boss gate
 
@@ -54,22 +62,44 @@ the paywall would never fire.
 
 ---
 
-## Adding the SDK
+## The SDK
 
 The Trials SDK is partner-distributed and **not** published to Google Maven, so
 `GameTrialsManager` binds to it **reflectively**:
 
-1. Drop `play-trials-sdk.aar` into [`app/libs/`](app/libs/).
+1. Drop `play-trials-sdk.aar` into [`app/libs/`](app/libs/) (gitignored — partner-confidential).
 2. Sync. `app/build.gradle.kts` already includes `fileTree(... "*.aar" ...)`.
 3. The status banner at the top of the screen flips from `SDK MISSING` to
-   `TRIAL ACTIVE — PlayTrials.stopTrial(Activity) [static]`, showing the exact bound signature.
+   `TRIAL ACTIVE - PlayTrials.stopTrial(Context) [static]`, showing the exact bound signature.
 
-The resolver tries several known class/method shapes (static utility vs. singleton factory), so
-minor drift between AAR drops does not break the build. Once the coordinate is public, delete
-the reflection and call `PlayTrials.stopTrial(activity)` directly.
+### What the AAR actually contains (v1.0.0, observed)
+
+The entire public surface is one method:
+
+```java
+public final class com.google.android.play.trials.PlayTrials {
+    public static void stopTrial(android.content.Context);   // Context, not Activity
+}
+```
+
+Two consequences the integration has to live with:
+
+- **There is no entitlement query API.** No `isFullVersion`, no `getTrialState`. Ownership can
+  only be learned from the paywall's own effect on the install, so `GameTrialsManager` logs
+  *"SDK exposes no entitlement probe"* and falls back to the local QA flag.
+- **`stopTrial()` swallows every failure.** It reflects into
+  `com.pairip.licensecheck.TrialClient` and only logs on failure, so on a sideloaded build it
+  returns normally and no paywall appears. Treating that as "trial stopped" would strand the
+  player on the boss screen, so `PlayTrialsBinding.isEnforcementAvailable()` probes for the
+  licensing client and the manager returns `NotEnforced` → fail open. That probe is **only**
+  used to decide whether to fail open, never to grant entitlement.
+
+The resolver still tries several class/method shapes so minor drift between AAR drops does not
+break the build. Once the coordinate is public, delete the reflection and call
+`PlayTrials.stopTrial(context)` directly.
 
 ```bash
-adb logcat -s GameTrialsManager   # prints the resolved binding on first use
+adb logcat -s GameTrialsManager PlayTrials   # prints the resolved binding on first use
 ```
 
 ### Manifest
@@ -91,7 +121,7 @@ required on Android 11+ for the SDK to reach the Play Store.
 |---|---|
 | Published as an Android App Bundle (`.aab`); legacy APKs unsupported | ✅ `./gradlew :app:bundleRelease` |
 | `minSdkVersion` ≥ 24 (for Play installer checks) | ✅ `minSdk = 24` |
-| `play-trials-sdk.aar` in `libs/` **and** declared in `build.gradle.kts` | ⚠️ declaration ✅ (`fileTree`), **AAR not present** |
+| `play-trials-sdk.aar` in `libs/` **and** declared in `build.gradle.kts` | ✅ AAR present, `fileTree` declaration, binding verified on device |
 | `<meta-data android:name="com.google.android.play.tbyb.trial_type" android:value="progression" />` | ✅ verified in the release merged manifest |
 | `stopTrial()` called on the main thread, not an isolated process | ✅ enforced at runtime in `GameTrialsManager.stopTrial` |
 
@@ -104,11 +134,6 @@ required on Android 11+ for the SDK to reach the Play Store.
 | AAB uploaded to an Open or Internal testing track | ❌ |
 | Testers opted in via the opt-in URL | ❌ |
 
-> [!WARNING]
-> **Until the AAR is present, the real SDK path has never executed.** Every run so far has
-> exercised only the fail-open branch (`SDK MISSING`). The reflective binding is written against
-> expected signatures, not observed ones — check `adb logcat -s GameTrialsManager` first thing
-> after dropping the AAR in.
 
 > [!IMPORTANT]
 > Trial enforcement depends on **installer checks** being enabled in the Play Console and on the

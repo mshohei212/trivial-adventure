@@ -1,6 +1,8 @@
 package com.GoogleLLC.TrivialAdventure.game
 
+import com.GoogleLLC.TrivialAdventure.trials.TrialAvailability
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -66,5 +68,61 @@ class GameRulesTest {
             xp = result.xp
         }
         assertEquals(GameRules.TRIAL_MILESTONE_LEVEL, level)
+    }
+
+    // -----------------------------------------------------------------------------------
+    // The milestone predicate. These pin `>=` rather than `==`: with equality, a player who
+    // ever gets past the milestone without stopping the trial disarms the paywall forever.
+    // -----------------------------------------------------------------------------------
+
+    private fun stateAt(level: Int) = GameUiState(
+        level = level,
+        trialAvailability = TrialAvailability.trialActive("test"),
+    )
+
+    @Test
+    fun `milestone boss is a trial milestone`() {
+        assertTrue(stateAt(GameRules.TRIAL_MILESTONE_LEVEL).isTrialMilestone)
+    }
+
+    @Test
+    fun `a later boss still re-asserts the trial`() {
+        val later = GameRules.TRIAL_MILESTONE_LEVEL + GameRules.BOSS_LEVEL_INTERVAL
+        assertTrue(GameRules.isBossLevel(later))
+        assertTrue(stateAt(later).isTrialMilestone)
+    }
+
+    @Test
+    fun `bosses before the milestone are ordinary`() {
+        // Only meaningful if the milestone is not the very first boss.
+        val earlier = GameRules.TRIAL_MILESTONE_LEVEL - GameRules.BOSS_LEVEL_INTERVAL
+        if (earlier >= GameRules.BOSS_LEVEL_INTERVAL) {
+            assertFalse(stateAt(earlier).isTrialMilestone)
+        }
+    }
+
+    @Test
+    fun `non-boss levels past the milestone are not milestones`() {
+        val past = GameRules.TRIAL_MILESTONE_LEVEL + 1
+        assertFalse(GameRules.isBossLevel(past))
+        assertFalse(stateAt(past).isTrialMilestone)
+    }
+
+    @Test
+    fun `owning the game disarms the milestone`() {
+        val owned = GameUiState(
+            level = GameRules.TRIAL_MILESTONE_LEVEL,
+            trialAvailability = TrialAvailability.fullVersion(),
+        )
+        assertFalse(owned.isTrialMilestone)
+    }
+
+    @Test
+    fun `a missing SDK disarms the milestone`() {
+        val noSdk = GameUiState(
+            level = GameRules.TRIAL_MILESTONE_LEVEL,
+            trialAvailability = TrialAvailability.sdkMissing(),
+        )
+        assertFalse(noSdk.isTrialMilestone)
     }
 }

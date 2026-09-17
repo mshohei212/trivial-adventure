@@ -23,6 +23,16 @@ public final class TrialOutcome {
         SDK_UNAVAILABLE,
 
         /**
+         * The SDK is present and {@code stopTrial} was called, but Play's licensing client is
+         * not in this build, so no paywall can appear.
+         *
+         * <p>{@code PlayTrials.stopTrial} swallows this condition -- it logs a warning and
+         * returns normally -- so without detecting it ourselves the game would withhold the
+         * reward and strand the player at a boss with no paywall on screen. Grant the reward.
+         */
+        NOT_ENFORCED,
+
+        /**
          * The SDK was invoked but threw. Treated as "fail open" by the caller: a broken trial
          * integration must never soft-lock the player behind a boss they cannot fight.
          */
@@ -59,6 +69,11 @@ public final class TrialOutcome {
     }
 
     @NonNull
+    public static TrialOutcome notEnforced(@NonNull String reason) {
+        return new TrialOutcome(Kind.NOT_ENFORCED, reason);
+    }
+
+    @NonNull
     public static TrialOutcome failed(@NonNull String reason) {
         return new TrialOutcome(Kind.FAILED, reason);
     }
@@ -68,7 +83,7 @@ public final class TrialOutcome {
         return kind;
     }
 
-    /** Populated only for {@link Kind#FAILED}. */
+    /** Populated for {@link Kind#FAILED} and {@link Kind#NOT_ENFORCED}. */
     @NonNull
     public String getReason() {
         return reason;

@@ -141,6 +141,35 @@ final class PlayTrialsBinding {
                 + " [" + (receiver == null ? "static" : "singleton") + "]";
     }
 
+    /**
+     * Class injected into the APK by Play at download time; it is what actually terminates the
+     * trial. Not a public API -- we only ever test for its presence, never call it.
+     */
+    private static final String PLAY_LICENSE_CLIENT = "com.pairip.licensecheck.TrialClient";
+
+    /**
+     * Whether Play can actually enforce a trial stop in this build.
+     *
+     * <p>{@code PlayTrials.stopTrial} resolves {@link #PLAY_LICENSE_CLIENT} reflectively and, if
+     * it is missing, logs
+     * <em>"...was not found, this may be a local build. Trial end only has an effect for
+     * artifacts downloaded from Play"</em> and returns normally. Because it reports no failure,
+     * a caller that trusted the return value would withhold the milestone reward and leave the
+     * player facing a boss with no paywall. Testing for the class ourselves is the only way to
+     * tell the two situations apart.
+     *
+     * <p>This is a heuristic on a Play implementation detail, so it is only ever used to decide
+     * whether to <em>fail open</em> -- never to grant entitlement.
+     */
+    static boolean isEnforcementAvailable() {
+        try {
+            Class.forName(PLAY_LICENSE_CLIENT);
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     void stopTrial(@NonNull Activity activity) throws Exception {
         stopTrialMethod.invoke(receiver, contextArgs(stopTrialMethod, activity, appContext));
     }
