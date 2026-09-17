@@ -135,7 +135,10 @@ re-grinding to Level 5 on every run is intolerable.
 ./gradlew :app:assembleDebug :app:testDebugUnitTest
 ```
 
-Requires JDK 17–21 (AGP 8.7.3 / Gradle 8.9). If your default JDK is newer:
+Toolchain: **AGP 8.13.2 / Gradle 8.14.5 / Kotlin 2.2.21**, `compileSdk` and `targetSdk` 36,
+`minSdk` 24, Java 17 bytecode.
+
+Requires JDK 17–21. AGP rejects newer JDKs, so if your default is newer, pin it per invocation:
 
 ```bash
 JAVA_HOME=/path/to/jdk-21 ./gradlew :app:assembleDebug
