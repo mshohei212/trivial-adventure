@@ -107,6 +107,56 @@ Requires JDK 17–21 (AGP 8.7.3 / Gradle 8.9). If your default JDK is newer:
 JAVA_HOME=/path/to/jdk-21 ./gradlew :app:assembleDebug
 ```
 
+## Release signing
+
+An **unsigned APK cannot be installed on a device or uploaded to Play**, so release builds
+read their signing credentials from `keystore.properties` at the repo root.
+
+One-time setup:
+
+```bash
+# 1. Generate a keystore (skip if you already have one).
+keytool -genkeypair -v \
+  -keystore keystore/trivialadventure-release.jks \
+  -alias trivialadventure -keyalg RSA -keysize 2048 -validity 10000 \
+  -dname "CN=TrivialAdventure Sandbox, O=Google LLC, C=JP"
+
+# 2. Point the build at it.
+cp keystore.properties.template keystore.properties
+$EDITOR keystore.properties      # fill in storePassword / keyPassword
+
+# 3. Build.
+./gradlew :app:assembleRelease
+# -> app/build/outputs/apk/release/app-release.apk   (signed, installable)
+```
+
+Verify what you produced:
+
+```bash
+$ANDROID_HOME/build-tools/<ver>/apksigner verify --print-certs \
+  app/build/outputs/apk/release/app-release.apk
+```
+
+Behaviour in each situation:
+
+| `keystore.properties` | Result |
+|---|---|
+| Present and complete | `app-release.apk`, signed and installable |
+| Absent | `app-release-unsigned.apk`; build still **succeeds** |
+| Present but missing a key | Build **fails** with `keystore.properties is missing the required '<key>' entry.` |
+
+The absent case is intentional: a fresh clone can still run `assembleRelease` without being
+handed signing material first.
+
+> **Never commit `keystore.properties` or the keystore.** Both are gitignored (`keystore.properties`,
+> `*.jks`, `*.keystore`, `/keystore/`). Only the credential-free `keystore.properties.template`
+> is tracked. Losing the keystore means you can no longer ship updates under the same key, so
+> back it up somewhere durable.
+
+For a real Play listing, prefer **Play App Signing**: you upload with this key and Google holds
+the app signing key, so a lost upload key can be reset.
+
+
 ## Key files
 
 | File | Role |

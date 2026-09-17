@@ -21,3 +21,11 @@ local.properties
 
 # The partner-distributed Trials SDK must not be committed.
 /app/libs/*.aar
+
+# Release signing material. Never commit these.
+# Both rules matter: keystore.properties holds the passwords, and the extension globs catch a
+# keystore dropped anywhere in the tree, not just the /keystore directory used by the README.
+keystore.properties
+*.jks
+*.keystore
+/keystore/
