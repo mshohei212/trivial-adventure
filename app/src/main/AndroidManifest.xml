@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Required by the Play Trials SDK to reach the Play Store backend. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+        On Android 11 (API 30)+ package visibility is filtered. The Trials SDK binds to the
+        Play Store service to terminate the trial and raise the paywall, so the Play Store
+        package must be explicitly visible to this app.
+    -->
+    <queries>
+        <package android:name="com.android.vending" />
+    </queries>
+
+    <application
+        android:name=".TrivialAdventureApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.TrivialAdventure">
+
+        <!--
+            ============================ PLAY TRIALS (TBYB) ============================
+            Declares this title as using the *Progression* trial model: the trial ends when
+            the game reports a milestone (here: reaching the Level 5 boss), rather than after
+            a fixed wall-clock duration.
+
+            This is the tag the Play Trials SDK reads at startup to decide which trial
+            controller to install. Without it the SDK defaults to a time-based trial and
+            GameTrialsManager.stopTrial() is a no-op.
+        -->
+        <meta-data
+            android:name="com.google.android.play.tbyb.trial_type"
+            android:value="progression" />
+
+        <!--
+            Some SDK drops read the namespaced variant below instead. Both are harmless when
+            present; uncomment if the partner build of the AAR expects this key.
+
+            <meta-data
+                android:name="com.google.android.play.trials.trial_type"
+                android:value="progression" />
+        -->
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.TrivialAdventure">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>

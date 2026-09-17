@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Legacy launcher icon for API 24-25, which cannot inflate <adaptive-icon>.
+    minSdk is 24, so this fallback must exist alongside mipmap-anydpi-v26/ic_launcher.xml.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/ic_launcher_background" />
+    <item
+        android:drawable="@drawable/ic_launcher_foreground"
+        android:gravity="center" />
+</layer-list>

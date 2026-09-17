@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Simple sword glyph used as the adaptive-icon foreground. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Blade -->
+    <path
+        android:fillColor="#F2E9FF"
+        android:pathData="M58.5,28 L62,31.5 L44.5,49 L41,45.5 Z" />
+    <!-- Blade tip -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M62,26 L64,34 L60,30 Z" />
+    <!-- Crossguard -->
+    <path
+        android:fillColor="#FFC857"
+        android:pathData="M36,48 L44,56 L40,60 L32,52 Z" />
+    <!-- Grip -->
+    <path
+        android:fillColor="#B07A3C"
+        android:pathData="M34,54 L38,58 L30,66 L26,62 Z" />
+    <!-- Pommel -->
+    <path
+        android:fillColor="#FFC857"
+        android:pathData="M28,64 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+    <!-- XP spark -->
+    <path
+        android:fillColor="#6EE7B7"
+        android:pathData="M70,58 L73,66 L81,69 L73,72 L70,80 L67,72 L59,69 L67,66 Z" />
+</vector>

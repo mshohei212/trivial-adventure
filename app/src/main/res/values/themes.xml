@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Compose owns all in-app theming; this platform theme only needs to provide a
+        window background and drop the ActionBar before setContent() runs.
+        Using android:Theme.Material avoids pulling in an AppCompat dependency.
+    -->
+    <style name="Theme.TrivialAdventure" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+        <item name="android:statusBarColor">@color/window_background</item>
+        <!-- Dark background, so status bar icons must stay light. -->
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

@@ -1,0 +1,23 @@
+# Build output
+# NOTE: `build/` (no leading slash) is required, not `/build` - the latter only matches the
+# root directory and would let app/build/ (including the APK) be committed.
+build/
+.gradle/
+.kotlin/
+/captures
+.externalNativeBuild
+.cxx
+
+# IDE / editor
+*.iml
+/.idea/
+/.vscode/
+
+# Machine-local: contains the absolute path to this machine's Android SDK.
+local.properties
+
+# macOS
+.DS_Store
+
+# The partner-distributed Trials SDK must not be committed.
+/app/libs/*.aar
