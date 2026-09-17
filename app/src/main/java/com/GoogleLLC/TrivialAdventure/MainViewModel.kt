@@ -121,8 +121,8 @@ class MainViewModel(
     /**
      * Result of the milestone call, reported by the Activity.
      *
-     * Only [TrialOutcome.TrialStopped] withholds the reward; every other outcome fails open so
-     * a missing or broken SDK can never soft-lock the tester at the boss.
+     * Only [TrialOutcome.Kind.TRIAL_STOPPED] withholds the reward; every other outcome fails open
+     * so a missing or broken SDK can never soft-lock the tester at the boss.
      */
     fun onTrialOutcome(outcome: TrialOutcome) {
         val level = _uiState.value.level
