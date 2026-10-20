@@ -193,6 +193,10 @@ public final class GameTrialsManager {
             // records. But the call cannot report that nothing happened, so decide the local
             // UX separately: with no licensing client there will be no paywall, and withholding
             // the reward here would strand the player at a boss with a blank screen.
+            if (isFullVersionUnlocked()) {
+                Log.i(TAG, "stopTrial() resolved to full version unlocked.");
+                return TrialOutcome.alreadyUnlocked();
+            }
             if (!PlayTrialsBinding.isEnforcementAvailable()) {
                 Log.w(TAG, "stopTrial() called, but Play's licensing client is absent: this build "
                         + "was not installed by Play, so no paywall will appear. Failing open.");
@@ -230,8 +234,8 @@ public final class GameTrialsManager {
     @Nullable
     private Boolean querySdkEntitlement() {
         Boolean cached = cachedSdkEntitlement;
-        if (cached != null) {
-            return cached;
+        if (Boolean.TRUE.equals(cached)) {
+            return Boolean.TRUE;
         }
 
         PlayTrialsBinding.Resolution current = resolution();
@@ -246,7 +250,9 @@ public final class GameTrialsManager {
             Log.w(TAG, "Entitlement query failed; assuming the trial is still active.", unwrap(t));
             entitled = null;
         }
-        cachedSdkEntitlement = entitled;
+        if (Boolean.TRUE.equals(entitled)) {
+            cachedSdkEntitlement = Boolean.TRUE;
+        }
         return entitled;
     }
 

@@ -39,14 +39,18 @@ android {
         // trial can run. Do not lower this.
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Milestone that terminates the Play Trial. Surfaced through BuildConfig so QA can
         // re-point the paywall trigger without touching game logic.
         buildConfigField("int", "TRIAL_MILESTONE_LEVEL", "5")
+
+        // SHA-1 certificate fingerprint registered for the OAuth Client.
+        val sha1Fingerprint = keystoreProperties?.getProperty("sha1Fingerprint")?.trim().orEmpty()
+        buildConfigField("String", "OAUTH_SHA1_FINGERPRINT", "\"$sha1Fingerprint\"")
     }
 
     signingConfigs {
@@ -76,6 +80,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
             // Null when keystore.properties is absent -> unsigned APK, build still succeeds.
             signingConfig = signingConfigs.findByName("release")
         }
@@ -136,3 +143,31 @@ dependencies {
     // ---------------------------------------------------------------------------------
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
 }
+
+// ---------------------------------------------------------------------------------
+// Workaround for Play Console "This App Bundle contains native code, and you've not
+// uploaded debug symbols" warning caused by `androidx.graphics:graphics-path`
+// (pulled in by Compose) shipping pre-stripped `libandroidx.graphics.path.so` files.
+// Injecting a minimal `.symtab` entry before `stripReleaseDebugSymbols` and
+// `extractReleaseNativeDebugMetadata` run lets AGP emit `BUNDLE-METADATA/.../debugsymbols`
+// while keeping the final packaged `.so` stripped with its original BuildID intact.
+// ---------------------------------------------------------------------------------
+tasks.matching { it.name == "mergeReleaseNativeLibs" }.configureEach {
+    doLast {
+        val sdkDir = android.sdkDirectory
+        val objcopy = sdkDir.resolve("ndk")
+            .walkTopDown()
+            .firstOrNull { it.name == "llvm-objcopy" && it.canExecute() }
+            ?: return@doLast
+
+        outputs.files.asFileTree.matching { include("**/*.so") }.forEach { soFile ->
+            ProcessBuilder(
+                objcopy.absolutePath,
+                "--add-symbol",
+                "JNI_OnLoad=.text:0,function",
+                soFile.absolutePath
+            ).inheritIO().start().waitFor()
+        }
+    }
+}
+

@@ -8,6 +8,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.LinkedHashMap;
@@ -142,15 +143,20 @@ final class PlayTrialsBinding {
     }
 
     /**
-     * Class injected into the APK by Play at download time; it is what actually terminates the
-     * trial. Not a public API -- we only ever test for its presence, never call it.
+     * Classes injected into the APK by Play at download time when Automatic Integrity Protection
+     * is enabled. {@code TrialClient} forwards {@code stopTrial} to {@code LicenseClient}, which
+     * tracks the live Play licensing state in {@code licenseCheckState}.
      */
-    private static final String PLAY_LICENSE_CLIENT = "com.pairip.licensecheck.TrialClient";
+    private static final String PLAY_TRIAL_CLIENT = "com.pairip.licensecheck.TrialClient";
+    private static final String PLAY_LICENSE_CLIENT = "com.pairip.licensecheck.LicenseClient";
+    private static final String LICENSE_STATE_FIELD = "licenseCheckState";
+    private static final String STATE_FULL_CHECK_OK = "FULL_CHECK_OK";
+    private static final String STATE_REPEATED_CHECK_REQUIRED = "REPEATED_CHECK_REQUIRED";
 
     /**
      * Whether Play can actually enforce a trial stop in this build.
      *
-     * <p>{@code PlayTrials.stopTrial} resolves {@link #PLAY_LICENSE_CLIENT} reflectively and, if
+     * <p>{@code PlayTrials.stopTrial} resolves {@link #PLAY_TRIAL_CLIENT} reflectively and, if
      * it is missing, logs
      * <em>"...was not found, this may be a local build. Trial end only has an effect for
      * artifacts downloaded from Play"</em> and returns normally. Because it reports no failure,
@@ -163,10 +169,46 @@ final class PlayTrialsBinding {
      */
     static boolean isEnforcementAvailable() {
         try {
-            Class.forName(PLAY_LICENSE_CLIENT);
-            return true;
+            Class.forName(PLAY_TRIAL_CLIENT);
+            return !Boolean.TRUE.equals(queryPairipEntitlement());
         } catch (Throwable t) {
             return false;
+        }
+    }
+
+    /**
+     * Reads Play's injected {@code LicenseClient.licenseCheckState} when the SDK AAR itself
+     * exposes no public entitlement getter (as in {@code play-trials-sdk} 1.0.0).
+     *
+     * <ul>
+     *   <li>{@code FULL_CHECK_OK}: Play licensing succeeded with no trial repeat metadata, i.e.
+     *       the user owns the full version (purchased or Internal Testing license).</li>
+     *   <li>{@code REPEATED_CHECK_REQUIRED}: Play licensing succeeded with trial repeat metadata,
+     *       i.e. the user is in an active trial.</li>
+     *   <li>{@code CHECK_REQUIRED} / {@code LOCAL_CHECK_OK} / {@code LOCAL_CHECK_REPORTED}: the
+     *       asynchronous IPC with {@code com.android.vending} has not finished yet.</li>
+     * </ul>
+     */
+    @Nullable
+    static Boolean queryPairipEntitlement() {
+        try {
+            Class<?> licenseClient = Class.forName(PLAY_LICENSE_CLIENT);
+            Field stateField = licenseClient.getDeclaredField(LICENSE_STATE_FIELD);
+            stateField.setAccessible(true);
+            Object state = stateField.get(null);
+            if (state == null) {
+                return null;
+            }
+            String stateName = state.toString();
+            if (STATE_FULL_CHECK_OK.equals(stateName)) {
+                return Boolean.TRUE;
+            }
+            if (STATE_REPEATED_CHECK_REQUIRED.equals(stateName)) {
+                return Boolean.FALSE;
+            }
+            return null;
+        } catch (Throwable t) {
+            return null;
         }
     }
 
@@ -177,16 +219,18 @@ final class PlayTrialsBinding {
     /** @return {@code true}/{@code false} when the SDK answers, {@code null} when it cannot. */
     @Nullable
     Boolean isFullVersion() throws Exception {
-        if (entitlementProbe == null) {
-            return null;
+        if (entitlementProbe != null) {
+            // No Activity here; entitlement checks only ever need a Context.
+            Object raw = entitlementProbe.method.invoke(
+                    receiver, contextArgs(entitlementProbe.method, null, appContext));
+            if (raw != null) {
+                Boolean interpreted = entitlementProbe.semantics.interpret(raw);
+                if (interpreted != null) {
+                    return interpreted;
+                }
+            }
         }
-        // No Activity here; entitlement checks only ever need a Context.
-        Object raw = entitlementProbe.method.invoke(
-                receiver, contextArgs(entitlementProbe.method, null, appContext));
-        if (raw == null) {
-            return null;
-        }
-        return entitlementProbe.semantics.interpret(raw);
+        return queryPairipEntitlement();
     }
 
     // -------------------------------------------------------------------------------------

@@ -15,7 +15,9 @@ import com.GoogleLLC.TrivialAdventure.game.QuestLogEntry
 import com.GoogleLLC.TrivialAdventure.trials.GameTrialsManager
 import com.GoogleLLC.TrivialAdventure.trials.TrialAvailability
 import com.GoogleLLC.TrivialAdventure.trials.TrialOutcome
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -54,6 +56,8 @@ class MainViewModel(
 
     /** Separate from [nextLogId] so the scene animates once per fight, not once per log line. */
     private var nextEncounterId = 0L
+
+    private var entitlementPollJob: Job? = null
 
     init {
         val (level, xp) = progressStore.load()
@@ -139,6 +143,7 @@ class MainViewModel(
                 // Play owns the screen now. No XP, no level: the player stays at the milestone
                 // so that returning from the paywall resumes exactly here.
                 log("Trial ended at the progression milestone. Play paywall requested.", LogKind.TRIAL)
+                awaitAsyncFullVersionCheck(milestoneLevel = level)
             }
 
             TrialOutcome.Kind.ALREADY_UNLOCKED -> {
@@ -187,9 +192,16 @@ class MainViewModel(
 
     /**
      * Re-checks entitlement whenever the game returns to the foreground: the user may have
-     * just bought the game on the paywall we launched.
+     * just bought the game on the paywall we launched, or Play's asynchronous licensing check
+     * may still be in flight right after cold start.
      */
     fun onResume() {
+        if (!checkAndApplyEntitlement(isBackgroundPoll = false)) {
+            awaitAsyncFullVersionCheck(milestoneLevel = null)
+        }
+    }
+
+    private fun checkAndApplyEntitlement(isBackgroundPoll: Boolean): Boolean {
         val wasUnlocked =
             _uiState.value.trialAvailability.kind == TrialAvailability.Kind.FULL_VERSION
         trialsManager.refreshEntitlement()
@@ -197,8 +209,42 @@ class MainViewModel(
         _uiState.update { it.copy(trialAvailability = availability) }
 
         if (!wasUnlocked && availability.kind == TrialAvailability.Kind.FULL_VERSION) {
-            log("Purchase detected - full version unlocked. The boss is now beatable.", LogKind.TRIAL)
-            _effects.trySend(GameEffect.ShowToast("Thanks for buying! Full game unlocked."))
+            if (isBackgroundPoll) {
+                log("Full version license verified. Progression is unrestricted.", LogKind.SYSTEM)
+            } else {
+                log("Purchase detected - full version unlocked. The boss is now beatable.", LogKind.TRIAL)
+                _effects.trySend(GameEffect.ShowToast("Thanks for buying! Full game unlocked."))
+            }
+        }
+        return availability.kind == TrialAvailability.Kind.FULL_VERSION
+    }
+
+    /**
+     * Play's injected `LicenseClient` binds to `com.android.vending.licensing.ILicensingService`
+     * asynchronously on startup and when `stopTrial` is invoked. Poll briefly so that once
+     * `FULL_CHECK_OK` arrives (~30-100ms later), the UI and milestone gate immediately reflect
+     * full-version ownership.
+     */
+    private fun awaitAsyncFullVersionCheck(milestoneLevel: Int?) {
+        entitlementPollJob?.cancel()
+        entitlementPollJob = viewModelScope.launch {
+            repeat(12) {
+                delay(250L)
+                if (trialsManager.refreshEntitlement()) {
+                    val availability = trialsManager.availability()
+                    val wasUnlocked =
+                        _uiState.value.trialAvailability.kind == TrialAvailability.Kind.FULL_VERSION
+                    _uiState.update { it.copy(trialAvailability = availability) }
+                    if (milestoneLevel != null && _uiState.value.level == milestoneLevel) {
+                        _effects.trySend(GameEffect.ShowToast(UNLOCKED_TOAST))
+                        log("Full version detected - no trial to stop.", LogKind.TRIAL)
+                        defeatBoss(milestoneLevel)
+                    } else if (!wasUnlocked) {
+                        log("Full version license verified. Progression is unrestricted.", LogKind.SYSTEM)
+                    }
+                    return@launch
+                }
+            }
         }
     }
 
