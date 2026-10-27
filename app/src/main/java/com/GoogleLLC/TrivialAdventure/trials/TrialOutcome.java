@@ -19,16 +19,9 @@ public final class TrialOutcome {
         /** Nothing to stop: the user already owns the full game. Grant the reward. */
         ALREADY_UNLOCKED,
 
-        /** No SDK on the classpath. Grant the reward so the sandbox stays playable. */
-        SDK_UNAVAILABLE,
-
         /**
-         * The SDK is present and {@code stopTrial} was called, but Play's licensing client is
-         * not in this build, so no paywall can appear.
-         *
-         * <p>{@code PlayTrials.stopTrial} swallows this condition -- it logs a warning and
-         * returns normally -- so without detecting it ourselves the game would withhold the
-         * reward and strand the player at a boss with no paywall on screen. Grant the reward.
+         * {@code PlayTrials.stopTrial} was called, but Play's licensing client is not active
+         * in this build, so no paywall can appear. Grant the reward.
          */
         NOT_ENFORCED,
 
@@ -42,8 +35,6 @@ public final class TrialOutcome {
     private static final TrialOutcome TRIAL_STOPPED = new TrialOutcome(Kind.TRIAL_STOPPED, "");
     private static final TrialOutcome ALREADY_UNLOCKED =
             new TrialOutcome(Kind.ALREADY_UNLOCKED, "");
-    private static final TrialOutcome SDK_UNAVAILABLE =
-            new TrialOutcome(Kind.SDK_UNAVAILABLE, "");
 
     private final Kind kind;
     private final String reason;
@@ -61,11 +52,6 @@ public final class TrialOutcome {
     @NonNull
     public static TrialOutcome alreadyUnlocked() {
         return ALREADY_UNLOCKED;
-    }
-
-    @NonNull
-    public static TrialOutcome sdkUnavailable() {
-        return SDK_UNAVAILABLE;
     }
 
     @NonNull

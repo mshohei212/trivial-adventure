@@ -77,7 +77,7 @@ class GameRulesTest {
 
     private fun stateAt(level: Int) = GameUiState(
         level = level,
-        trialAvailability = TrialAvailability.trialActive("test"),
+        trialAvailability = TrialAvailability.trialActive(),
     )
 
     @Test
@@ -115,14 +115,5 @@ class GameRulesTest {
             trialAvailability = TrialAvailability.fullVersion(),
         )
         assertFalse(owned.isTrialMilestone)
-    }
-
-    @Test
-    fun `a missing SDK disarms the milestone`() {
-        val noSdk = GameUiState(
-            level = GameRules.TRIAL_MILESTONE_LEVEL,
-            trialAvailability = TrialAvailability.sdkMissing(),
-        )
-        assertFalse(noSdk.isTrialMilestone)
     }
 }

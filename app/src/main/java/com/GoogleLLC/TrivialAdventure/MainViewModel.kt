@@ -152,12 +152,6 @@ class MainViewModel(
                 defeatBoss(level)
             }
 
-            TrialOutcome.Kind.SDK_UNAVAILABLE -> {
-                _effects.trySend(GameEffect.ShowToast(UNLOCKED_TOAST))
-                log("Play Trials SDK absent - milestone treated as a normal boss.", LogKind.TRIAL)
-                defeatBoss(level)
-            }
-
             TrialOutcome.Kind.NOT_ENFORCED -> {
                 _effects.trySend(GameEffect.ShowToast(UNLOCKED_TOAST))
                 log(
@@ -287,12 +281,8 @@ class MainViewModel(
 
     private fun startupMessage(availability: TrialAvailability): String = when (availability.kind) {
         TrialAvailability.Kind.TRIAL_ACTIVE ->
-            "Trial active. Bound to ${availability.detail}. Trial ends at level ${GameRules.TRIAL_MILESTONE_LEVEL}."
+            "Trial active. Trial ends at level ${GameRules.TRIAL_MILESTONE_LEVEL}."
         TrialAvailability.Kind.FULL_VERSION -> "Full version. Progression is unrestricted."
-        TrialAvailability.Kind.SDK_MISSING ->
-            "Play Trials SDK not installed - drop play-trials-sdk.aar into app/libs to arm the paywall."
-        TrialAvailability.Kind.SDK_INCOMPATIBLE ->
-            "Trials SDK found but unusable: ${availability.detail}"
     }
 
     companion object {

@@ -206,13 +206,9 @@ private fun StatusHeader(state: GameUiState) {
 private fun TrialStatusBanner(availability: TrialAvailability) {
     val (label, color) = when (availability.kind) {
         TrialAvailability.Kind.TRIAL_ACTIVE ->
-            "TRIAL ACTIVE - ${availability.detail}" to TrialBlue
+            "TRIAL ACTIVE - PlayTrials.stopTrial(Context)" to TrialBlue
         TrialAvailability.Kind.FULL_VERSION ->
             "FULL VERSION - trial milestone disabled" to XpMint
-        TrialAvailability.Kind.SDK_MISSING ->
-            "SDK MISSING - add play-trials-sdk.aar to app/libs" to RuneGold
-        TrialAvailability.Kind.SDK_INCOMPATIBLE ->
-            "SDK INCOMPATIBLE - ${availability.detail}" to BossRed
     }
 
     Card(
@@ -346,7 +342,7 @@ private fun GameScreenQuestPreview() {
             state = GameUiState(
                 level = 3,
                 xp = 60,
-                trialAvailability = TrialAvailability.trialActive("PlayTrials.stopTrial(Activity) [static]"),
+                trialAvailability = TrialAvailability.trialActive(),
                 lastEncounter = Encounter(id = 1, enemy = Enemy.SLIME, xpGained = 32),
                 log = listOf(
                     QuestLogEntry(2, "Level up! You are now level 3", LogKind.LEVEL_UP),
@@ -368,7 +364,7 @@ private fun GameScreenMilestonePreview() {
             state = GameUiState(
                 level = 5,
                 xp = 15,
-                trialAvailability = TrialAvailability.trialActive("PlayTrials.stopTrial(Activity) [static]"),
+                trialAvailability = TrialAvailability.trialActive(),
                 log = listOf(
                     QuestLogEntry(1, "Level 5! A boss bars the way: Gatekeeper of the Vault", LogKind.LEVEL_UP),
                 ),

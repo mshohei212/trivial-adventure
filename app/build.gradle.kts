@@ -126,22 +126,8 @@ dependencies {
 
     testImplementation(libs.junit)
 
-    // ---------------------------------------------------------------------------------
     // Google Play Trials SDK (Try Before You Buy / Progression API).
-    //
-    // The SDK is distributed to partners as `play-trials-sdk.aar` and is NOT published to
-    // google()/mavenCentral(). Drop the AAR into `app/libs/` and it is picked up here
-    // automatically -- no further Gradle edits required.
-    //
-    // If/when the artifact is published to the Google Maven repo, replace the fileTree
-    // dependency below with the coordinate instead:
-    //
-    //     implementation("com.google.android.play:trials:1.0.0")
-    //
-    // GameTrialsManager binds to the SDK reflectively, so the module compiles and runs
-    // whether or not the AAR is present (see TrialAvailability.Kind.SDK_MISSING).
-    // ---------------------------------------------------------------------------------
-    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
+    implementation(files("libs/play-trials-sdk.aar"))
 }
 
 // ---------------------------------------------------------------------------------
