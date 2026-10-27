@@ -29,3 +29,5 @@ keystore.properties
 *.jks
 *.keystore
 /keystore/
+
+.agent
