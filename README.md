@@ -30,28 +30,27 @@ Level 1 ──quest × ~14──▶ Level 5 (first boss)
                     TrialOutcome  →  viewModel.onTrialOutcome(...)
 ```
 
-The comparison is `>=`, not `==`. If the paywall does not actually engage (sideloaded build,
-enforcement disabled, SDK missing) the player advances past Level 5, and an equality check would
-silently disarm the milestone forever. With `>=` **every** boss at or beyond the milestone
-re-asserts the trial — verified on the emulator at Level 10.
+The comparison is `>=`, not `==`. If the paywall does not actually engage (sideloaded build or
+enforcement disabled) the player advances past Level 5, and an equality check would silently
+disarm the milestone forever. With `>=` **every** boss at or beyond the milestone re-asserts the
+trial.
 
 `stopTrial` needs a foreground `Activity` (the paywall attaches to its window), and a ViewModel
-must never hold one — hence the effect hop through the Activity. The SDK's own signature only
-asks for a `Context`, but passing the Activity keeps the paywall attached to the visible window.
+must never hold one — hence the effect hop through the Activity. The SDK's own signature asks for
+a `Context`, and passing the foreground `Activity` keeps the paywall attached to the visible window.
 
 ### Outcomes
 
 | Outcome | When | Game behaviour |
 |---|---|---|
-| `TrialStopped` | SDK present, trial enforceable | **No reward.** Play raises the paywall; the player stays on the boss level so returning resumes exactly there. |
+| `TrialStopped` | Trial active and enforceable | **No reward.** Play raises the paywall; the player stays on the boss level so returning resumes exactly there. |
 | `NotEnforced` | `stopTrial()` returned, but Play's licensing client is absent (not installed by Play) | Toast *"Full Game Unlocked! Boss Defeated!"*, advance a level — **fail open** |
-| `AlreadyUnlocked` | User owns the full game | Same as above |
-| `SdkUnavailable` | `play-trials-sdk.aar` not on the classpath | Same as above — the sandbox stays playable |
-| `Failed(reason)` | SDK threw | Same as above (**fail open**) |
+| `AlreadyUnlocked` | User owns the full game (`FULL_CHECK_OK` or QA override) | Same as above |
+| `Failed(reason)` | SDK threw or called off the main thread | Same as above (**fail open**) |
 
 > [!IMPORTANT]
-> Every outcome except `TrialStopped` fails open. A broken or absent trial integration must
-> never soft-lock a tester behind a boss they cannot fight.
+> Every outcome except `TrialStopped` fails open. A broken or non-Play build must never
+> soft-lock a tester behind a boss they cannot fight.
 
 
 ### The boss gate
@@ -64,42 +63,38 @@ the paywall would never fire.
 
 ## The SDK
 
-The Trials SDK is partner-distributed and **not** published to Google Maven, so
-`GameTrialsManager` binds to it **reflectively**:
+`app/build.gradle.kts` directly depends on [`app/libs/play-trials-sdk.aar`](app/libs/play-trials-sdk.aar):
 
-1. Drop `play-trials-sdk.aar` into [`app/libs/`](app/libs/) (gitignored — partner-confidential).
-2. Sync. `app/build.gradle.kts` already includes `fileTree(... "*.aar" ...)`.
-3. The status banner at the top of the screen flips from `SDK MISSING` to
-   `TRIAL ACTIVE - PlayTrials.stopTrial(Context) [static]`, showing the exact bound signature.
+```kotlin
+implementation(files("libs/play-trials-sdk.aar"))
+```
 
-### What the AAR actually contains (v1.0.0, observed)
+### What the AAR contains (v1.0.0)
 
-The entire public surface is one method:
+The entire public surface is a single static method:
 
 ```java
 public final class com.google.android.play.trials.PlayTrials {
-    public static void stopTrial(android.content.Context);   // Context, not Activity
+    public static void stopTrial(android.content.Context);
 }
 ```
 
-Two consequences the integration has to live with:
+Key runtime behaviors on Play-distributed vs. local builds:
 
-- **There is no entitlement query API.** No `isFullVersion`, no `getTrialState`. Ownership can
-  only be learned from the paywall's own effect on the install, so `GameTrialsManager` logs
-  *"SDK exposes no entitlement probe"* and falls back to the local QA flag.
-- **`stopTrial()` swallows every failure.** It reflects into
-  `com.pairip.licensecheck.TrialClient` and only logs on failure, so on a sideloaded build it
-  returns normally and no paywall appears. Treating that as "trial stopped" would strand the
-  player on the boss screen, so `PlayTrialsBinding.isEnforcementAvailable()` probes for the
-  licensing client and the manager returns `NotEnforced` → fail open. That probe is **only**
-  used to decide whether to fail open, never to grant entitlement.
-
-The resolver still tries several class/method shapes so minor drift between AAR drops does not
-break the build. Once the coordinate is public, delete the reflection and call
-`PlayTrials.stopTrial(context)` directly.
+- **No public entitlement query API in the AAR.** `PlayTrials` provides no `isFullVersion()` or
+  `getTrialState()` method. However, when Google Play distributes the APK with Automatic Integrity
+  Protection (Installer check) enabled, Play injects `com.pairip.licensecheck.TrialClient` and
+  `com.pairip.licensecheck.LicenseClient` into **both** trial APKs and full-version APKs (purchased
+  or Internal Testing track). `GameTrialsManager` inspects `LicenseClient.licenseCheckState`:
+  - `FULL_CHECK_OK` → the user owns the full version (`AlreadyUnlocked`).
+  - `REPEATED_CHECK_REQUIRED` → the user is in an active trial (`TrialStopped`).
+- **`stopTrial()` silently no-ops on sideloaded builds.** Internally it reflects into
+  `com.pairip.licensecheck.TrialClient` and only logs a warning when absent. On a sideloaded
+  (`adb install`) build, `GameTrialsManager` detects the absence of `TrialClient` and returns
+  `NotEnforced` so the player is not soft-locked at Level 5.
 
 ```bash
-adb logcat -s GameTrialsManager PlayTrials   # prints the resolved binding on first use
+adb logcat -s GameTrialsManager PlayTrials LicenseClient
 ```
 
 ### Manifest
@@ -119,9 +114,9 @@ required on Android 11+ for the SDK to reach the Play Store.
 
 | Requirement | Status |
 |---|---|
-| Published as an Android App Bundle (`.aab`); legacy APKs unsupported | ✅ `./gradlew :app:bundleRelease` |
+| Published as an Android App Bundle (`.aab`); legacy APKs unsupported | ✅ `./gradlew :app:bundleRelease` (includes native debug symbols) |
 | `minSdkVersion` ≥ 24 (for Play installer checks) | ✅ `minSdk = 24` |
-| `play-trials-sdk.aar` in `libs/` **and** declared in `build.gradle.kts` | ✅ AAR present, `fileTree` declaration, binding verified on device |
+| `play-trials-sdk.aar` in `libs/` **and** declared in `build.gradle.kts` | ✅ `implementation(files("libs/play-trials-sdk.aar"))` |
 | `<meta-data android:name="com.google.android.play.tbyb.trial_type" android:value="progression" />` | ✅ verified in the release merged manifest |
 | `stopTrial()` called on the main thread, not an isolated process | ✅ enforced at runtime in `GameTrialsManager.stopTrial` |
 
@@ -129,16 +124,16 @@ required on Android 11+ for the SDK to reach the Play Store.
 
 | Requirement | Status |
 |---|---|
-| Play App Signing enabled | ❌ currently a local self-generated key |
-| **Installer checks (anti-tamper) enabled** — strict prerequisite | ❌ not configured |
-| AAB uploaded to an Open or Internal testing track | ❌ |
-| Testers opted in via the opt-in URL | ❌ |
+| Play App Signing enabled | ✅ |
+| **Installer checks (Automatic Protection) enabled** — strict prerequisite | ✅ |
+| AAB uploaded to an Open or Internal testing track | ✅ |
+| Testers opted in via the opt-in URL | ✅ |
 
 
 > [!IMPORTANT]
 > Trial enforcement depends on **installer checks** being enabled in the Play Console and on the
-> build being installed **by Play** from a test track the account has opted into. A sideloaded
-> APK will not enforce the trial, so `stopTrial()` appearing to do nothing locally is expected.
+> build being installed **by Play** as a trial. A sideloaded APK will not enforce the trial, and
+> an Internal Testing track install grants a full-version license (`FULL_CHECK_OK`).
 
 ---
 
@@ -227,22 +222,11 @@ the app signing key, so a lost upload key can be reset.
 
 | File | Role |
 |---|---|
-| `trials/GameTrialsManager.java` | Sole seam to the SDK; entitlement, `stopTrial` (Java) |
-| `trials/PlayTrialsBinding.java` | Reflective resolution of the SDK surface (Java, package-private) |
-| `trials/TrialAvailability.java` | SDK-free domain type; `Kind` enum + `detail` (Java) |
-| `trials/TrialOutcome.java` | SDK-free domain type; `Kind` enum + `reason` (Java) |
+| `trials/GameTrialsManager.java` | Direct `PlayTrials.stopTrial(activity)` integration & entitlement check (Java) |
+| `trials/TrialAvailability.java` | Domain type (`TRIAL_ACTIVE`, `FULL_VERSION`) (Java) |
+| `trials/TrialOutcome.java` | Domain type (`TRIAL_STOPPED`, `ALREADY_UNLOCKED`, `NOT_ENFORCED`, `FAILED`) (Java) |
 | `MainViewModel.kt` | Level/XP state, quest & boss logic, milestone branch |
 | `MainActivity.kt` | Hosts Compose; performs the `Activity`-scoped SDK call |
 | `game/GameModels.kt` | `GameRules` (pure, unit-tested) + `GameUiState` |
 | `ui/GameScreen.kt` | Compose UI, trial status banner, QA controls |
 
-### Why the SDK layer is Java but the UI is Kotlin
-
-Jetpack Compose **cannot** be written in Java — `@Composable` is implemented by a Kotlin
-compiler plugin. So the split is drawn at the SDK seam: everything a partner needs to copy
-when integrating Play Trials (`trials/`) is plain Java, while the UI stays Kotlin/Compose.
-
-The two domain types use an inner `Kind` enum plus a detail string rather than a class
-hierarchy, because Kotlin does not treat a Java class hierarchy as sealed — subclasses would
-force an `else` branch on every `when`. Kotlin *does* honour exhaustive `when` over a Java
-enum, so call sites stay exhaustive and compiler-checked.
